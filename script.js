@@ -1,5 +1,6 @@
 /**
- * Merry Christmas Ticket Scratcher - v5 (Security & Obfuscation)
+ * Merry Christmas Ticket Scratcher - Final Gold Version
+ * Features: Security, Logic Fixes, Dialogue Polish, BGM, Procedural Scratch Audio
  */
 
 // --- Configuration ---
@@ -9,6 +10,7 @@ const CONFIG = {
 		footsteps: 'sfx/footsteps.mp3',
 		woosh: 'sfx/woosh.mp3',
 		yay: 'sfx/yay.mp3'
+		// Note: BGM is handled separately to allow streaming
 	},
 	images: {
 		bg: 'img/bg.png',
@@ -34,7 +36,6 @@ const CONFIG = {
 		cols: [91, 251, 411, 571],
 		iconW: 160,
 		iconH: 122,
-		// Renamed for obscurity
 		textBox: { x: 91, y: 862, w: 637, h: 98 } 
 	}
 };
@@ -43,7 +44,7 @@ const CONFIG = {
 const State = {
 	count: 0,
 	nextTargetIndex: 2 + Math.floor(Math.random() * 3), 
-	secretText: "LOADING...", // Renamed
+	secretText: "LOADING...", 
 	audio: {},
 	assets: {},
 	// Dialogue State
@@ -54,63 +55,109 @@ const State = {
 		['img/speech_bubble_5.png', 'img/speech_bubble_6.png']
 	],
 	winnerPair: ['img/speech_bubble_win_1.png', 'img/speech_bubble_win_2.png'],
-	dialogueTimers: [] 
+	dialogueTimers: [],
+	// Audio Context for Scratch Synthesis
+	audioCtx: null,
+	scratchGain: null,
+	bgmObj: null
 };
 
-/**
- * Utility: Load Image
- */
+// --- Audio Synthesis (Procedural Sound) ---
+function initAudioSystem() {
+	const AudioContext = window.AudioContext || window.webkitAudioContext;
+	State.audioCtx = new AudioContext();
+
+	// 1. Create Pink Noise Buffer (Sounds more like paper than white noise)
+	const bufferSize = State.audioCtx.sampleRate * 2; // 2 seconds loop
+	const buffer = State.audioCtx.createBuffer(1, bufferSize, State.audioCtx.sampleRate);
+	const data = buffer.getChannelData(0);
+	
+	// Pink noise generation algorithm
+	let b0, b1, b2, b3, b4, b5, b6;
+	b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
+	for (let i = 0; i < bufferSize; i++) {
+		const white = Math.random() * 2 - 1;
+		b0 = 0.99886 * b0 + white * 0.0555179;
+		b1 = 0.99332 * b1 + white * 0.0750759;
+		b2 = 0.96900 * b2 + white * 0.1538520;
+		b3 = 0.86650 * b3 + white * 0.3104856;
+		b4 = 0.55000 * b4 + white * 0.5329522;
+		b5 = -0.7616 * b5 - white * 0.0168980;
+		data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+		data[i] *= 0.11; // Lower base volume
+		b6 = white * 0.115926;
+	}
+
+	// 2. Source Node
+	const noise = State.audioCtx.createBufferSource();
+	noise.buffer = buffer;
+	noise.loop = true;
+
+	// 3. Gain Node (Volume Control)
+	State.scratchGain = State.audioCtx.createGain();
+	State.scratchGain.gain.value = 0; // Silent by default
+
+	// 4. Filter (Make it sound a bit muffled like scratching paper)
+	const filter = State.audioCtx.createBiquadFilter();
+	filter.type = 'bandpass';
+	filter.frequency.value = 800;
+
+	// Connect: Noise -> Filter -> Gain -> Output
+	noise.connect(filter);
+	filter.connect(State.scratchGain);
+	State.scratchGain.connect(State.audioCtx.destination);
+	
+	noise.start(0);
+}
+
+// Helper to ramp volume up/down
+let scratchTimeout = null;
+function playScratchSound() {
+	if (!State.audioCtx || !State.scratchGain) return;
+	
+	// Ramp up volume quickly
+	State.scratchGain.gain.setTargetAtTime(0.4, State.audioCtx.currentTime, 0.05);
+
+	// Debounce the stop
+	if (scratchTimeout) clearTimeout(scratchTimeout);
+	scratchTimeout = setTimeout(() => {
+		// Ramp down volume
+		State.scratchGain.gain.setTargetAtTime(0, State.audioCtx.currentTime, 0.1);
+	}, 100); // Stop 100ms after mouse stops moving
+}
+
+// --- Standard Loader ---
 function loadImage(key, src) {
 	return new Promise((resolve, reject) => {
 		const img = new Image();
-		img.onload = () => {
-			State.assets[key] = img;
-			resolve(img);
-		};
+		img.onload = () => { State.assets[key] = img; resolve(img); };
 		img.onerror = reject;
 		img.src = src;
 	});
 }
 
-/**
- * Utility: Load Audio
- */
 function loadAudio(name, src) {
 	return new Promise((resolve) => {
 		const aud = new Audio(src);
 		aud.preload = 'auto';
-		aud.addEventListener('canplaythrough', () => {
-			State.assets[name] = aud; 
-			resolve();
-		}, { once: true });
+		aud.addEventListener('canplaythrough', () => { State.assets[name] = aud; resolve(); }, { once: true });
 		aud.onerror = () => resolve();
 		setTimeout(() => resolve(), 2000); 
 	});
 }
 
-/**
- * Load & Decode Data
- * Expects { "xmas": "BASE64STRING" }
- */
 async function loadData() {
 	try {
 		const req = await fetch('data.json');
 		const json = await req.json();
-		// Decode Base64 
-		if (json.xmas) {
-			State.secretText = atob(json.xmas);
-		} else {
-			State.secretText = "ERROR-NO-DATA";
-		}
+		if (json.xmas) State.secretText = atob(json.xmas);
+		else State.secretText = "ERROR-NO-DATA";
 	} catch (e) {
-		console.error("Failed to load data", e);
+		console.error(e);
 		State.secretText = "OFFLINE-MODE";
 	}
 }
 
-/**
- * Initialization Sequence
- */
 async function init() {
 	console.log("Starting Initialization...");
 	
@@ -118,10 +165,14 @@ async function init() {
 	const iconPromises = CONFIG.icons.map(name => loadImage(name, `img/icons/${name}.png`));
 	const audioPromises = Object.entries(CONFIG.sounds).map(([key, src]) => loadAudio(key, src));
 	const dataPromise = loadData();
-	// Load Local Font
 	const fontPromise = document.fonts.load('40px "VT323"');
 
 	await Promise.all([...imagePromises, ...iconPromises, ...audioPromises, dataPromise, fontPromise]);
+
+	// Setup BGM (No await)
+	State.bgmObj = new Audio('sfx/bgm.mp3');
+	State.bgmObj.volume = 0.6;
+	State.bgmObj.loop = true;
 
 	setupStartScreen();
 }
@@ -134,15 +185,19 @@ function setupStartScreen() {
 	btn.id = 'start-btn';
 	btn.innerText = 'Click to Open';
 	btn.onclick = () => {
+		// 1. Initialize Web Audio API (Must be user triggered)
+		initAudioSystem();
+		
+		// 2. Play BGM
+		State.bgmObj.play().catch(e => console.log("BGM Blocked", e));
+		
+		// 3. Play Sfx & Start
 		playSfx('door', 0.01); 
 		startIntro();
 	};
 	loaderContent.appendChild(btn);
 }
 
-/**
- * Intro Animation Sequence
- */
 function startIntro() {
 	const loader = document.getElementById('loader');
 	const scene = document.getElementById('scene');
@@ -159,39 +214,24 @@ function startIntro() {
 
 		setTimeout(() => {
 			girls.classList.add('animate-enter');
-			
-			// 4s Walk Animation
 			setTimeout(() => {
-				if(steps) {
-					steps.pause();
-					steps.currentTime = 0;
-				}
-
+				if(steps) { steps.pause(); steps.currentTime = 0; }
 				girls.style.animation = 'none'; 
 				girls.classList.remove('animate-enter');
 				girls.classList.add('girls-final-pos');
-
-				// Start Initial Dialogue
 				triggerDialogueSequence();
-
 			}, 4000); 
 		}, 500);
 	}, 1000);
 }
 
-/**
- * Dialogue System
- */
 function triggerDialogueSequence(isSuccess = false) {
 	clearDialogueTimers(); 
-
 	const b1 = document.getElementById('bubble-1');
 	const b2 = document.getElementById('bubble-2');
 	const hitbox = document.getElementById('glowing-tickets-hitbox');
 
-	// Determine sources
 	let src1, src2;
-
 	if (isSuccess) {
 		src1 = State.winnerPair[0];
 		src2 = State.winnerPair[1];
@@ -205,22 +245,16 @@ function triggerDialogueSequence(isSuccess = false) {
 	b1.src = src1;
 	b2.src = src2;
 
-	// Animation Sequence
 	State.dialogueTimers.push(setTimeout(() => {
 		b1.classList.add('visible');
-		
 		State.dialogueTimers.push(setTimeout(() => {
 			b2.classList.add('visible');
-			
-			// Optional: ensure tickets visible (should already be)
 			const tickets = document.getElementById('glowing-tickets-img');
 			tickets.style.opacity = '1';
 			tickets.classList.add('tickets-active');
-
 		}, 1000));
 	}, 500));
 	
-	// Interaction always enabled
 	hitbox.style.pointerEvents = 'auto';
 	hitbox.onclick = spawnTicket;
 }
@@ -232,10 +266,8 @@ function clearDialogueTimers() {
 
 function hideDialogue() {
 	clearDialogueTimers(); 
-	
 	document.getElementById('bubble-1').classList.remove('visible');
 	document.getElementById('bubble-2').classList.remove('visible');
-	
 	document.getElementById('glowing-tickets-hitbox').style.pointerEvents = 'none';
 }
 
@@ -250,24 +282,17 @@ function playSfx(name, vol=1.0) {
 	return null;
 }
 
-/**
- * Game Loop: Spawning Tickets
- */
 function spawnTicket() {
 	playSfx('woosh');
 	hideDialogue(); 
 
 	const isTarget = (State.count === State.nextTargetIndex);
-	
-	// Create Ticket
 	new ScratcherTicket(isTarget);
 
-	// Update Game State
 	if (isTarget) {
 		State.nextTargetIndex = State.count + 2 + Math.floor(Math.random() * 4);
 		console.log(`Target met. Next target at #${State.nextTargetIndex}`);
 	}
-	
 	State.count++;
 }
 
@@ -295,10 +320,7 @@ class ScratcherTicket {
 		let grid = new Array(12).fill(null);
 
 		if (isTarget) {
-			// 1. Pick Target Icon
 			const winIcon = iconNames[Math.floor(Math.random() * iconNames.length)];
-			
-			// 2. Pick 3 places for Target
 			let places = [];
 			while(places.length < 3) {
 				let r = Math.floor(Math.random() * 12);
@@ -307,33 +329,21 @@ class ScratcherTicket {
 			this.targetIndices = places;
 			places.forEach(p => grid[p] = winIcon);
 
-			// 3. Fill others with Deck (2 of each, preventing 3-of-a-kind in empty slots)
 			const otherIcons = iconNames.filter(n => n !== winIcon);
 			let deck = [];
 			otherIcons.forEach(n => { deck.push(n); deck.push(n); });
-			
-			// Shuffle Deck
 			for (let i = deck.length - 1; i > 0; i--) {
 				const j = Math.floor(Math.random() * (i + 1));
 				[deck[i], deck[j]] = [deck[j], deck[i]];
 			}
 
-			// Fill empty slots
 			for(let i=0; i<12; i++) {
-				if(grid[i] === null) {
-					grid[i] = deck.pop(); 
-				}
+				if(grid[i] === null) grid[i] = deck.pop(); 
 			}
-
 			return grid;
-
 		} else {
-			// Non-Target: Deck Shuffle (Guarantees NO 3-of-a-kind)
 			let deck = [];
-			iconNames.forEach(name => {
-				deck.push(name);
-				deck.push(name);
-			});
+			iconNames.forEach(name => { deck.push(name); deck.push(name); });
 			for (let i = deck.length - 1; i > 0; i--) {
 				const j = Math.floor(Math.random() * (i + 1));
 				[deck[i], deck[j]] = [deck[j], deck[i]];
@@ -404,6 +414,9 @@ class ScratcherTicket {
 		const scratch = (e) => {
 			if (!isDrawing) return; 
 			
+			// Play Procedural Sound
+			playScratchSound();
+
 			const rect = canvas.getBoundingClientRect();
 			const clientX = e.touches ? e.touches[0].clientX : e.clientX;
 			const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -465,7 +478,6 @@ class ScratcherTicket {
 
 	triggerEffect() {
 		this.targetRevealed = true;
-		
 		setTimeout(() => {
 			playSfx('yay');
 			startConfetti();
@@ -477,13 +489,11 @@ class ScratcherTicket {
 		this.element.style.transform = 'translateY(150vh)';
 		setTimeout(() => {
 			this.element.remove();
-			// Resume Dialogue based on success state
 			triggerDialogueSequence(this.isTarget);
 		}, 700); 
 	}
 }
 
-// Renamed helper
 function generateRandomCode() {
 	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	let str = "";
