@@ -47,6 +47,9 @@ const State = {
 	secretText: "LOADING...", 
 	audio: {},
 	assets: {},
+	// Audio Settings
+	masterVolume: 1.0,
+	isMuted: false,
 	// Dialogue State
 	cycleIndex: 0, 
 	loserPairs: [
@@ -62,19 +65,63 @@ const State = {
 	bgmObj: null
 };
 
+// --- Audio Volume Logic ---
+function setupAudioControls() {
+	const slider = document.getElementById('volume-slider');
+	const muteBtn = document.getElementById('mute-btn');
+	const iconOn = document.getElementById('icon-sound-on');
+	const iconOff = document.getElementById('icon-sound-off');
+
+	// Slider Interaction
+	slider.addEventListener('input', (e) => {
+		State.masterVolume = parseFloat(e.target.value);
+		if (State.masterVolume > 0 && State.isMuted) {
+			// Auto unmute if dragging slider
+			toggleMute(false);
+		}
+		updateAllVolumes();
+	});
+
+	// Mute Interaction
+	muteBtn.addEventListener('click', () => {
+		toggleMute(!State.isMuted);
+	});
+
+	function toggleMute(mute) {
+		State.isMuted = mute;
+		if (mute) {
+			iconOn.style.display = 'none';
+			iconOff.style.display = 'block';
+		} else {
+			iconOn.style.display = 'block';
+			iconOff.style.display = 'none';
+		}
+		updateAllVolumes();
+	}
+}
+
+function updateAllVolumes() {
+	const vol = State.isMuted ? 0 : State.masterVolume;
+
+	// 1. Update BGM
+	if (State.bgmObj) {
+		State.bgmObj.volume = 0.6 * vol; // Max BGM vol is 0.6
+	}
+
+	// 2. Note: SFX are updated when played (in playSfx function)
+	// 3. Note: Scratch Sound is updated in playScratchSound
+}
+
 // --- Audio Synthesis (Procedural Sound) ---
 function initAudioSystem() {
 	const AudioContext = window.AudioContext || window.webkitAudioContext;
 	State.audioCtx = new AudioContext();
 
-	// 1. Create Pink Noise Buffer (Sounds more like paper than white noise)
-	const bufferSize = State.audioCtx.sampleRate * 2; // 2 seconds loop
+	const bufferSize = State.audioCtx.sampleRate * 2; 
 	const buffer = State.audioCtx.createBuffer(1, bufferSize, State.audioCtx.sampleRate);
 	const data = buffer.getChannelData(0);
 	
-	// Pink noise generation algorithm
-	let b0, b1, b2, b3, b4, b5, b6;
-	b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
+	let b0=0, b1=0, b2=0, b3=0, b4=0, b5=0, b6=0;
 	for (let i = 0; i < bufferSize; i++) {
 		const white = Math.random() * 2 - 1;
 		b0 = 0.99886 * b0 + white * 0.0555179;
@@ -84,25 +131,21 @@ function initAudioSystem() {
 		b4 = 0.55000 * b4 + white * 0.5329522;
 		b5 = -0.7616 * b5 - white * 0.0168980;
 		data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-		data[i] *= 0.11; // Lower base volume
+		data[i] *= 0.11; 
 		b6 = white * 0.115926;
 	}
 
-	// 2. Source Node
 	const noise = State.audioCtx.createBufferSource();
 	noise.buffer = buffer;
 	noise.loop = true;
 
-	// 3. Gain Node (Volume Control)
 	State.scratchGain = State.audioCtx.createGain();
-	State.scratchGain.gain.value = 0; // Silent by default
+	State.scratchGain.gain.value = 0; 
 
-	// 4. Filter (Make it sound a bit muffled like scratching paper)
 	const filter = State.audioCtx.createBiquadFilter();
 	filter.type = 'bandpass';
 	filter.frequency.value = 800;
 
-	// Connect: Noise -> Filter -> Gain -> Output
 	noise.connect(filter);
 	filter.connect(State.scratchGain);
 	State.scratchGain.connect(State.audioCtx.destination);
@@ -110,20 +153,33 @@ function initAudioSystem() {
 	noise.start(0);
 }
 
-// Helper to ramp volume up/down
 let scratchTimeout = null;
 function playScratchSound() {
 	if (!State.audioCtx || !State.scratchGain) return;
 	
-	// Ramp up volume quickly
-	State.scratchGain.gain.setTargetAtTime(0.4, State.audioCtx.currentTime, 0.05);
+	const globalVol = State.isMuted ? 0 : State.masterVolume;
+	const targetVol = 0.4 * globalVol; // Max scratch vol is 0.4
 
-	// Debounce the stop
+	State.scratchGain.gain.setTargetAtTime(targetVol, State.audioCtx.currentTime, 0.05);
+
 	if (scratchTimeout) clearTimeout(scratchTimeout);
 	scratchTimeout = setTimeout(() => {
-		// Ramp down volume
 		State.scratchGain.gain.setTargetAtTime(0, State.audioCtx.currentTime, 0.1);
-	}, 100); // Stop 100ms after mouse stops moving
+	}, 100); 
+}
+
+// --- Modified playSfx to use Master Volume ---
+function playSfx(name, vol=1.0) {
+	const aud = State.assets[name];
+	const globalVol = State.isMuted ? 0 : State.masterVolume;
+
+	if (aud) {
+		aud.volume = vol * globalVol;
+		aud.currentTime = 0;
+		aud.play().catch(e => console.log("Audio play error", e));
+		return aud;
+	}
+	return null;
 }
 
 // --- Standard Loader ---
@@ -169,11 +225,11 @@ async function init() {
 
 	await Promise.all([...imagePromises, ...iconPromises, ...audioPromises, dataPromise, fontPromise]);
 
-	// Setup BGM (No await)
 	State.bgmObj = new Audio('sfx/bgm.mp3');
-	State.bgmObj.volume = 0.6;
+	State.bgmObj.volume = 0.6; // Will be overwritten by master volume update logic immediately
 	State.bgmObj.loop = true;
 
+	setupAudioControls(); // <--- Initialize the widget
 	setupStartScreen();
 }
 
@@ -185,13 +241,12 @@ function setupStartScreen() {
 	btn.id = 'start-btn';
 	btn.innerText = 'Click to Open';
 	btn.onclick = () => {
-		// 1. Initialize Web Audio API (Must be user triggered)
 		initAudioSystem();
 		
-		// 2. Play BGM
+		// Ensure BGM respects current slider value
+		updateAllVolumes();
 		State.bgmObj.play().catch(e => console.log("BGM Blocked", e));
 		
-		// 3. Play Sfx & Start
 		playSfx('door', 0.01); 
 		startIntro();
 	};
