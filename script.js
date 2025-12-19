@@ -1,6 +1,6 @@
 /**
  * Merry Christmas Ticket Scratcher - Final Gold Version
- * Features: Security, Logic Fixes, Dialogue Polish, BGM, Procedural Scratch Audio
+ * Features: Security, Logic Fixes, Dialogue Polish, BGM, Procedural Scratch Audio, UI Polish
  */
 
 // --- Configuration ---
@@ -10,7 +10,6 @@ const CONFIG = {
 		footsteps: 'sfx/footsteps.mp3',
 		woosh: 'sfx/woosh.mp3',
 		yay: 'sfx/yay.mp3'
-		// Note: BGM is handled separately to allow streaming
 	},
 	images: {
 		bg: 'img/bg.png',
@@ -76,7 +75,6 @@ function setupAudioControls() {
 	slider.addEventListener('input', (e) => {
 		State.masterVolume = parseFloat(e.target.value);
 		if (State.masterVolume > 0 && State.isMuted) {
-			// Auto unmute if dragging slider
 			toggleMute(false);
 		}
 		updateAllVolumes();
@@ -105,11 +103,8 @@ function updateAllVolumes() {
 
 	// 1. Update BGM
 	if (State.bgmObj) {
-		State.bgmObj.volume = 0.6 * vol; // Max BGM vol is 0.6
+		State.bgmObj.volume = 0.6 * vol; 
 	}
-
-	// 2. Note: SFX are updated when played (in playSfx function)
-	// 3. Note: Scratch Sound is updated in playScratchSound
 }
 
 // --- Audio Synthesis (Procedural Sound) ---
@@ -158,7 +153,7 @@ function playScratchSound() {
 	if (!State.audioCtx || !State.scratchGain) return;
 	
 	const globalVol = State.isMuted ? 0 : State.masterVolume;
-	const targetVol = 0.4 * globalVol; // Max scratch vol is 0.4
+	const targetVol = 0.4 * globalVol; 
 
 	State.scratchGain.gain.setTargetAtTime(targetVol, State.audioCtx.currentTime, 0.05);
 
@@ -182,38 +177,7 @@ function playSfx(name, vol=1.0) {
 	return null;
 }
 
-// --- Standard Loader ---
-function loadImage(key, src) {
-	return new Promise((resolve, reject) => {
-		const img = new Image();
-		img.onload = () => { State.assets[key] = img; resolve(img); };
-		img.onerror = reject;
-		img.src = src;
-	});
-}
-
-function loadAudio(name, src) {
-	return new Promise((resolve) => {
-		const aud = new Audio(src);
-		aud.preload = 'auto';
-		aud.addEventListener('canplaythrough', () => { State.assets[name] = aud; resolve(); }, { once: true });
-		aud.onerror = () => resolve();
-		setTimeout(() => resolve(), 2000); 
-	});
-}
-
-async function loadData() {
-	try {
-		const req = await fetch('data.json');
-		const json = await req.json();
-		if (json.xmas) State.secretText = atob(json.xmas);
-		else State.secretText = "ERROR-NO-DATA";
-	} catch (e) {
-		console.error(e);
-		State.secretText = "OFFLINE-MODE";
-	}
-}
-
+// --- Modified init ---
 async function init() {
 	console.log("Starting Initialization...");
 	
@@ -226,10 +190,10 @@ async function init() {
 	await Promise.all([...imagePromises, ...iconPromises, ...audioPromises, dataPromise, fontPromise]);
 
 	State.bgmObj = new Audio('sfx/bgm.mp3');
-	State.bgmObj.volume = 0.6; // Will be overwritten by master volume update logic immediately
+	State.bgmObj.volume = 0.6; 
 	State.bgmObj.loop = true;
 
-	setupAudioControls(); // <--- Initialize the widget
+	setupAudioControls(); 
 	setupStartScreen();
 }
 
@@ -243,7 +207,6 @@ function setupStartScreen() {
 	btn.onclick = () => {
 		initAudioSystem();
 		
-		// Ensure BGM respects current slider value
 		updateAllVolumes();
 		State.bgmObj.play().catch(e => console.log("BGM Blocked", e));
 		
@@ -259,6 +222,12 @@ function startIntro() {
 	const girls = document.getElementById('girls-component');
 
 	loader.style.opacity = '0';
+	
+	// Show Audio Controls Logic
+	setTimeout(() => {
+		document.getElementById('audio-controls').classList.add('visible');
+	}, 1000);
+
 	setTimeout(() => {
 		loader.remove();
 		scene.style.opacity = '1';
@@ -326,15 +295,35 @@ function hideDialogue() {
 	document.getElementById('glowing-tickets-hitbox').style.pointerEvents = 'none';
 }
 
-function playSfx(name, vol=1.0) {
-	const aud = State.assets[name];
-	if (aud) {
-		aud.volume = vol;
-		aud.currentTime = 0;
-		aud.play().catch(e => console.log("Audio play error", e));
-		return aud;
+function loadImage(key, src) {
+	return new Promise((resolve, reject) => {
+		const img = new Image();
+		img.onload = () => { State.assets[key] = img; resolve(img); };
+		img.onerror = reject;
+		img.src = src;
+	});
+}
+
+function loadAudio(name, src) {
+	return new Promise((resolve) => {
+		const aud = new Audio(src);
+		aud.preload = 'auto';
+		aud.addEventListener('canplaythrough', () => { State.assets[name] = aud; resolve(); }, { once: true });
+		aud.onerror = () => resolve();
+		setTimeout(() => resolve(), 2000); 
+	});
+}
+
+async function loadData() {
+	try {
+		const req = await fetch('data.json');
+		const json = await req.json();
+		if (json.xmas) State.secretText = atob(json.xmas);
+		else State.secretText = "ERROR-NO-DATA";
+	} catch (e) {
+		console.error(e);
+		State.secretText = "OFFLINE-MODE";
 	}
-	return null;
 }
 
 function spawnTicket() {
