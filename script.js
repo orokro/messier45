@@ -1,5 +1,5 @@
 /**
- * Merry Christmas Ticket Scratcher - v3
+ * Merry Christmas Ticket Scratcher - v4 (Polished Logic)
  */
 
 // --- Configuration ---
@@ -41,22 +41,23 @@ const CONFIG = {
 // --- State Management ---
 const State = {
 	gameCount: 0,
-	nextWinIndex: 2 + Math.floor(Math.random() * 3), // First win is between 2nd and 5th try
+	nextWinIndex: 2 + Math.floor(Math.random() * 3), 
 	prizeCode: "LOADING...",
 	audio: {},
 	assets: {},
 	// Dialogue State
-	loserPairIndex: 0, // 0 = (1,2), 1 = (3,4), 2 = (5,6)
+	loserPairIndex: 0, 
 	loserPairs: [
 		['img/speech_bubble_1.png', 'img/speech_bubble_2.png'],
 		['img/speech_bubble_3.png', 'img/speech_bubble_4.png'],
 		['img/speech_bubble_5.png', 'img/speech_bubble_6.png']
 	],
-	winnerPair: ['img/speech_bubble_win_1.png', 'img/speech_bubble_win_2.png']
+	winnerPair: ['img/speech_bubble_win_1.png', 'img/speech_bubble_win_2.png'],
+	dialogueTimers: [] // To store timeouts so we can cancel them on click
 };
 
 /**
- * Utility: Load Image and Store it
+ * Utility: Load Image
  */
 function loadImage(key, src) {
 	return new Promise((resolve, reject) => {
@@ -103,13 +104,10 @@ async function loadData() {
 async function init() {
 	console.log("Starting Initialization...");
 	
-	// 1. Assets
 	const imagePromises = Object.entries(CONFIG.images).map(([key, src]) => loadImage(key, src));
 	const iconPromises = CONFIG.icons.map(name => loadImage(name, `img/icons/${name}.png`));
 	const audioPromises = Object.entries(CONFIG.sounds).map(([key, src]) => loadAudio(key, src));
 	const dataPromise = loadData();
-
-	// 2. Font Loading (Crucial fix for serif glitch)
 	const fontPromise = document.fonts.load('40px "VT323"');
 
 	await Promise.all([...imagePromises, ...iconPromises, ...audioPromises, dataPromise, fontPromise]);
@@ -162,7 +160,7 @@ function startIntro() {
 				girls.classList.remove('animate-enter');
 				girls.classList.add('girls-final-pos');
 
-				// Start Initial Dialogue (Pair 0)
+				// Start Initial Dialogue
 				triggerDialogueSequence();
 
 			}, 4000); 
@@ -172,9 +170,10 @@ function startIntro() {
 
 /**
  * Dialogue System
- * Handles fading bubbles in and out and swapping sources
  */
 function triggerDialogueSequence(isWinner = false) {
+	clearDialogueTimers(); // Safety clear
+
 	const b1 = document.getElementById('bubble-1');
 	const b2 = document.getElementById('bubble-2');
 	const tickets = document.getElementById('glowing-tickets-img');
@@ -191,41 +190,49 @@ function triggerDialogueSequence(isWinner = false) {
 		const pair = State.loserPairs[State.loserPairIndex];
 		src1 = pair[0];
 		src2 = pair[1];
-		
-		// Advance index for NEXT time (0 -> 1 -> 2 -> 0)
 		State.loserPairIndex = (State.loserPairIndex + 1) % State.loserPairs.length;
 	}
 
-	// Swap Sources (Assuming opacity is 0 currently)
 	b1.src = src1;
 	b2.src = src2;
 
-	// Animation Sequence
-	setTimeout(() => {
+	// Animation Sequence using tracked timers
+	// 1. Show Bubble 1
+	State.dialogueTimers.push(setTimeout(() => {
 		b1.classList.add('visible');
 		
-		setTimeout(() => {
+		// 2. Show Bubble 2
+		State.dialogueTimers.push(setTimeout(() => {
 			b2.classList.add('visible');
 
-			// Show Tickets
-			setTimeout(() => {
+			// 3. Ensure Tickets are Visible (Only strictly needed for first run, but good for safety)
+			State.dialogueTimers.push(setTimeout(() => {
 				tickets.style.opacity = '1';
 				tickets.classList.add('tickets-active');
-				hitbox.style.pointerEvents = 'auto';
-				
-				// Ensure event listener is there (and not duplicated)
-				hitbox.onclick = spawnTicket;
-			}, 800);
-		}, 1000);
-	}, 500);
+				// Note: We don't block clicks waiting for this anymore
+			}, 800));
+		}, 1000));
+	}, 500));
+	
+	// Ensure interaction is enabled immediately (don't wait for bubbles)
+	// Users can skip bubbles by clicking
+	hitbox.style.pointerEvents = 'auto';
+	hitbox.onclick = spawnTicket;
+}
+
+function clearDialogueTimers() {
+	State.dialogueTimers.forEach(t => clearTimeout(t));
+	State.dialogueTimers = [];
 }
 
 function hideDialogue() {
+	clearDialogueTimers(); // Cancel any pending bubbles trying to appear
+	
 	document.getElementById('bubble-1').classList.remove('visible');
 	document.getElementById('bubble-2').classList.remove('visible');
-	const tickets = document.getElementById('glowing-tickets-img');
-	tickets.style.opacity = '0';
-	tickets.classList.remove('tickets-active');
+	
+	// IMPORTANT: We do NOT hide the glowing tickets anymore
+	// We only disable clicking them so you don't double spawn
 	document.getElementById('glowing-tickets-hitbox').style.pointerEvents = 'none';
 }
 
@@ -245,7 +252,7 @@ function playSfx(name, vol=1.0) {
  */
 function spawnTicket() {
 	playSfx('woosh');
-	hideDialogue(); // Fade out bubbles
+	hideDialogue(); 
 
 	const isWinner = (State.gameCount === State.nextWinIndex);
 	
@@ -254,8 +261,6 @@ function spawnTicket() {
 
 	// Update Game State
 	if (isWinner) {
-		// If they won, set a new random target in the future so they can win again
-		// e.g., 2 to 5 games from now
 		State.nextWinIndex = State.gameCount + 2 + Math.floor(Math.random() * 4);
 		console.log(`User won! Next win scheduled for game #${State.nextWinIndex}`);
 	}
@@ -283,27 +288,41 @@ class ScratcherTicket {
 	}
 
 	generateGrid(isWinner) {
-		let icons = [];
 		const iconNames = CONFIG.icons;
+		let grid = new Array(12).fill(null);
 
 		if (isWinner) {
+			// 1. Pick Winner Icon
 			const winIcon = iconNames[Math.floor(Math.random() * iconNames.length)];
-			let grid = new Array(12).fill(null);
 			
+			// 2. Pick 3 places for Winner
 			let places = [];
 			while(places.length < 3) {
 				let r = Math.floor(Math.random() * 12);
 				if(!places.includes(r)) places.push(r);
 			}
 			this.winningIndices = places;
-
 			places.forEach(p => grid[p] = winIcon);
 
+			// 3. Fill the other 9 spots STRICTLY without creating a triplet or matching winner
+			// Create a deck of all OTHER icons (2 of each)
+			const loserIcons = iconNames.filter(n => n !== winIcon);
+			let deck = [];
+			loserIcons.forEach(n => { deck.push(n); deck.push(n); });
+			
+			// Shuffle Deck
+			for (let i = deck.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[deck[i], deck[j]] = [deck[j], deck[i]];
+			}
+
+			// Fill empty slots from deck
 			for(let i=0; i<12; i++) {
 				if(grid[i] === null) {
-					grid[i] = iconNames[Math.floor(Math.random() * iconNames.length)];
+					grid[i] = deck.pop(); // Take from deck
 				}
 			}
+
 			return grid;
 
 		} else {
@@ -381,7 +400,10 @@ class ScratcherTicket {
 	setupScratchInteraction(canvas, ctx) {
 		let isDrawing = false;
 		const scratch = (e) => {
-			if (!isDrawing || this.winnerRevealed) return; // Stop drawing if already won
+			// Fix: Removed "this.winnerRevealed" check here. 
+			// User can now scratch even after winning.
+			if (!isDrawing) return; 
+			
 			const rect = canvas.getBoundingClientRect();
 			const clientX = e.touches ? e.touches[0].clientX : e.clientX;
 			const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -457,8 +479,7 @@ class ScratcherTicket {
 		setTimeout(() => {
 			this.element.remove();
 			
-			// Resume Scene Dialogue
-			// Pass "this.isWinner" to decide which dialogue to show
+			// Resume Scene Dialogue (Optional, tickets are already active)
 			triggerDialogueSequence(this.isWinner);
 
 		}, 700); 
@@ -479,7 +500,7 @@ function startConfetti() {
 	const container = document.getElementById('confetti-container');
 	const colors = ['#ff0000', '#00ff00', '#ffffff', '#ffd700']; 
 	const particles = [];
-	const particleCount = 200; // Doubled
+	const particleCount = 200; 
 
 	for(let i=0; i<particleCount; i++) {
 		const div = document.createElement('div');
