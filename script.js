@@ -1,5 +1,5 @@
 /**
- * Merry Christmas Ticket Scratcher - v4 (Polished Logic)
+ * Merry Christmas Ticket Scratcher - v5 (Security & Obfuscation)
  */
 
 // --- Configuration ---
@@ -34,26 +34,27 @@ const CONFIG = {
 		cols: [91, 251, 411, 571],
 		iconW: 160,
 		iconH: 122,
-		keyBox: { x: 91, y: 862, w: 637, h: 98 } 
+		// Renamed for obscurity
+		textBox: { x: 91, y: 862, w: 637, h: 98 } 
 	}
 };
 
 // --- State Management ---
 const State = {
-	gameCount: 0,
-	nextWinIndex: 2 + Math.floor(Math.random() * 3), 
-	prizeCode: "LOADING...",
+	count: 0,
+	nextTargetIndex: 2 + Math.floor(Math.random() * 3), 
+	secretText: "LOADING...", // Renamed
 	audio: {},
 	assets: {},
 	// Dialogue State
-	loserPairIndex: 0, 
+	cycleIndex: 0, 
 	loserPairs: [
 		['img/speech_bubble_1.png', 'img/speech_bubble_2.png'],
 		['img/speech_bubble_3.png', 'img/speech_bubble_4.png'],
 		['img/speech_bubble_5.png', 'img/speech_bubble_6.png']
 	],
 	winnerPair: ['img/speech_bubble_win_1.png', 'img/speech_bubble_win_2.png'],
-	dialogueTimers: [] // To store timeouts so we can cancel them on click
+	dialogueTimers: [] 
 };
 
 /**
@@ -87,14 +88,23 @@ function loadAudio(name, src) {
 	});
 }
 
+/**
+ * Load & Decode Data
+ * Expects { "xmas": "BASE64STRING" }
+ */
 async function loadData() {
 	try {
 		const req = await fetch('data.json');
 		const json = await req.json();
-		State.prizeCode = json.prizeKey || "ERROR-NO-KEY";
+		// Decode Base64 
+		if (json.xmas) {
+			State.secretText = atob(json.xmas);
+		} else {
+			State.secretText = "ERROR-NO-DATA";
+		}
 	} catch (e) {
-		console.error("Failed to load data.json", e);
-		State.prizeCode = "OFFLINE-KEY";
+		console.error("Failed to load data", e);
+		State.secretText = "OFFLINE-MODE";
 	}
 }
 
@@ -108,6 +118,7 @@ async function init() {
 	const iconPromises = CONFIG.icons.map(name => loadImage(name, `img/icons/${name}.png`));
 	const audioPromises = Object.entries(CONFIG.sounds).map(([key, src]) => loadAudio(key, src));
 	const dataPromise = loadData();
+	// Load Local Font
 	const fontPromise = document.fonts.load('40px "VT323"');
 
 	await Promise.all([...imagePromises, ...iconPromises, ...audioPromises, dataPromise, fontPromise]);
@@ -171,51 +182,45 @@ function startIntro() {
 /**
  * Dialogue System
  */
-function triggerDialogueSequence(isWinner = false) {
-	clearDialogueTimers(); // Safety clear
+function triggerDialogueSequence(isSuccess = false) {
+	clearDialogueTimers(); 
 
 	const b1 = document.getElementById('bubble-1');
 	const b2 = document.getElementById('bubble-2');
-	const tickets = document.getElementById('glowing-tickets-img');
 	const hitbox = document.getElementById('glowing-tickets-hitbox');
 
 	// Determine sources
 	let src1, src2;
 
-	if (isWinner) {
+	if (isSuccess) {
 		src1 = State.winnerPair[0];
 		src2 = State.winnerPair[1];
 	} else {
-		// Loser Cycle
-		const pair = State.loserPairs[State.loserPairIndex];
+		const pair = State.loserPairs[State.cycleIndex];
 		src1 = pair[0];
 		src2 = pair[1];
-		State.loserPairIndex = (State.loserPairIndex + 1) % State.loserPairs.length;
+		State.cycleIndex = (State.cycleIndex + 1) % State.loserPairs.length;
 	}
 
 	b1.src = src1;
 	b2.src = src2;
 
-	// Animation Sequence using tracked timers
-	// 1. Show Bubble 1
+	// Animation Sequence
 	State.dialogueTimers.push(setTimeout(() => {
 		b1.classList.add('visible');
 		
-		// 2. Show Bubble 2
 		State.dialogueTimers.push(setTimeout(() => {
 			b2.classList.add('visible');
+			
+			// Optional: ensure tickets visible (should already be)
+			const tickets = document.getElementById('glowing-tickets-img');
+			tickets.style.opacity = '1';
+			tickets.classList.add('tickets-active');
 
-			// 3. Ensure Tickets are Visible (Only strictly needed for first run, but good for safety)
-			State.dialogueTimers.push(setTimeout(() => {
-				tickets.style.opacity = '1';
-				tickets.classList.add('tickets-active');
-				// Note: We don't block clicks waiting for this anymore
-			}, 800));
 		}, 1000));
 	}, 500));
 	
-	// Ensure interaction is enabled immediately (don't wait for bubbles)
-	// Users can skip bubbles by clicking
+	// Interaction always enabled
 	hitbox.style.pointerEvents = 'auto';
 	hitbox.onclick = spawnTicket;
 }
@@ -226,13 +231,11 @@ function clearDialogueTimers() {
 }
 
 function hideDialogue() {
-	clearDialogueTimers(); // Cancel any pending bubbles trying to appear
+	clearDialogueTimers(); 
 	
 	document.getElementById('bubble-1').classList.remove('visible');
 	document.getElementById('bubble-2').classList.remove('visible');
 	
-	// IMPORTANT: We do NOT hide the glowing tickets anymore
-	// We only disable clicking them so you don't double spawn
 	document.getElementById('glowing-tickets-hitbox').style.pointerEvents = 'none';
 }
 
@@ -254,28 +257,28 @@ function spawnTicket() {
 	playSfx('woosh');
 	hideDialogue(); 
 
-	const isWinner = (State.gameCount === State.nextWinIndex);
+	const isTarget = (State.count === State.nextTargetIndex);
 	
 	// Create Ticket
-	new ScratcherTicket(isWinner);
+	new ScratcherTicket(isTarget);
 
 	// Update Game State
-	if (isWinner) {
-		State.nextWinIndex = State.gameCount + 2 + Math.floor(Math.random() * 4);
-		console.log(`User won! Next win scheduled for game #${State.nextWinIndex}`);
+	if (isTarget) {
+		State.nextTargetIndex = State.count + 2 + Math.floor(Math.random() * 4);
+		console.log(`Target met. Next target at #${State.nextTargetIndex}`);
 	}
 	
-	State.gameCount++;
+	State.count++;
 }
 
 /**
  * Scratcher Ticket Component Class
  */
 class ScratcherTicket {
-	constructor(isWinner) {
-		this.isWinner = isWinner;
+	constructor(isTarget) {
+		this.isTarget = isTarget;
 		this.container = document.getElementById('ticket-overlay-container');
-		this.gridData = this.generateGrid(isWinner);
+		this.gridData = this.generateGrid(isTarget);
 		this.element = this.createDOM();
 		this.container.appendChild(this.element);
 		
@@ -284,31 +287,30 @@ class ScratcherTicket {
 		});
 
 		this.scratchedQuadrants = new Array(12).fill(0).map(() => [false, false, false, false]); 
-		this.winnerRevealed = false;
+		this.targetRevealed = false;
 	}
 
-	generateGrid(isWinner) {
+	generateGrid(isTarget) {
 		const iconNames = CONFIG.icons;
 		let grid = new Array(12).fill(null);
 
-		if (isWinner) {
-			// 1. Pick Winner Icon
+		if (isTarget) {
+			// 1. Pick Target Icon
 			const winIcon = iconNames[Math.floor(Math.random() * iconNames.length)];
 			
-			// 2. Pick 3 places for Winner
+			// 2. Pick 3 places for Target
 			let places = [];
 			while(places.length < 3) {
 				let r = Math.floor(Math.random() * 12);
 				if(!places.includes(r)) places.push(r);
 			}
-			this.winningIndices = places;
+			this.targetIndices = places;
 			places.forEach(p => grid[p] = winIcon);
 
-			// 3. Fill the other 9 spots STRICTLY without creating a triplet or matching winner
-			// Create a deck of all OTHER icons (2 of each)
-			const loserIcons = iconNames.filter(n => n !== winIcon);
+			// 3. Fill others with Deck (2 of each, preventing 3-of-a-kind in empty slots)
+			const otherIcons = iconNames.filter(n => n !== winIcon);
 			let deck = [];
-			loserIcons.forEach(n => { deck.push(n); deck.push(n); });
+			otherIcons.forEach(n => { deck.push(n); deck.push(n); });
 			
 			// Shuffle Deck
 			for (let i = deck.length - 1; i > 0; i--) {
@@ -316,17 +318,17 @@ class ScratcherTicket {
 				[deck[i], deck[j]] = [deck[j], deck[i]];
 			}
 
-			// Fill empty slots from deck
+			// Fill empty slots
 			for(let i=0; i<12; i++) {
 				if(grid[i] === null) {
-					grid[i] = deck.pop(); // Take from deck
+					grid[i] = deck.pop(); 
 				}
 			}
 
 			return grid;
 
 		} else {
-			// Loser: Deck Shuffle (No 3 of a kind)
+			// Non-Target: Deck Shuffle (Guarantees NO 3-of-a-kind)
 			let deck = [];
 			iconNames.forEach(name => {
 				deck.push(name);
@@ -336,7 +338,7 @@ class ScratcherTicket {
 				const j = Math.floor(Math.random() * (i + 1));
 				[deck[i], deck[j]] = [deck[j], deck[i]];
 			}
-			this.winningIndices = [];
+			this.targetIndices = [];
 			return deck.slice(0, 12);
 		}
 	}
@@ -372,9 +374,9 @@ class ScratcherTicket {
 		ctx.textBaseline = "middle";
 		ctx.fillStyle = "#333";
 		
-		const txt = this.isWinner ? State.prizeCode : generateFakeKey();
-		const cx = CONFIG.coords.keyBox.x + (CONFIG.coords.keyBox.w / 2);
-		const cy = CONFIG.coords.keyBox.y + (CONFIG.coords.keyBox.h / 2);
+		const txt = this.isTarget ? State.secretText : generateRandomCode();
+		const cx = CONFIG.coords.textBox.x + (CONFIG.coords.textBox.w / 2);
+		const cy = CONFIG.coords.textBox.y + (CONFIG.coords.textBox.h / 2);
 		ctx.fillText(txt, cx, cy);
 
 		const finalDataUrl = bgCanvas.toDataURL();
@@ -400,8 +402,6 @@ class ScratcherTicket {
 	setupScratchInteraction(canvas, ctx) {
 		let isDrawing = false;
 		const scratch = (e) => {
-			// Fix: Removed "this.winnerRevealed" check here. 
-			// User can now scratch even after winning.
 			if (!isDrawing) return; 
 			
 			const rect = canvas.getBoundingClientRect();
@@ -434,9 +434,9 @@ class ScratcherTicket {
 	}
 
 	checkHotspots(x, y) {
-		if (this.winnerRevealed || !this.isWinner) return;
+		if (this.targetRevealed || !this.isTarget) return;
 
-		this.winningIndices.forEach(idx => {
+		this.targetIndices.forEach(idx => {
 			const row = Math.floor(idx / 4);
 			const col = idx % 4;
 			const iconX = CONFIG.coords.cols[col];
@@ -454,19 +454,18 @@ class ScratcherTicket {
 			}
 		});
 
-		const allScratched = this.winningIndices.every(idx => {
+		const allScratched = this.targetIndices.every(idx => {
 			return this.scratchedQuadrants[idx].every(q => q === true);
 		});
 
 		if (allScratched) {
-			this.triggerWin();
+			this.triggerEffect();
 		}
 	}
 
-	triggerWin() {
-		this.winnerRevealed = true;
+	triggerEffect() {
+		this.targetRevealed = true;
 		
-		// 1 Second Delay for effect
 		setTimeout(() => {
 			playSfx('yay');
 			startConfetti();
@@ -478,15 +477,14 @@ class ScratcherTicket {
 		this.element.style.transform = 'translateY(150vh)';
 		setTimeout(() => {
 			this.element.remove();
-			
-			// Resume Scene Dialogue (Optional, tickets are already active)
-			triggerDialogueSequence(this.isWinner);
-
+			// Resume Dialogue based on success state
+			triggerDialogueSequence(this.isTarget);
 		}, 700); 
 	}
 }
 
-function generateFakeKey() {
+// Renamed helper
+function generateRandomCode() {
 	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	let str = "";
 	for(let i=0; i<15; i++) {

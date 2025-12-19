@@ -9,6 +9,14 @@ body, html {
 	font-family: sans-serif;
 }
 
+/* Local Font Loading */
+@font-face {
+	font-family: 'VT323';
+	src: url('fonts/VT323-Regular.ttf') format('truetype');
+	font-weight: normal;
+	font-style: normal;
+}
+
 /* * ----------------------------
  * Loader & Start Screen
  * ----------------------------
@@ -16,7 +24,7 @@ body, html {
 #loader {
 	position: fixed;
 	inset: 0;
-	background-color: #00ABAE; /* Updated Color */
+	background-color: #00ABAE;
 	z-index: 9999;
 	display: flex;
 	justify-content: center;
@@ -36,7 +44,6 @@ body, html {
 	letter-spacing: 2px;
 }
 
-/* The Start Button */
 #start-btn {
 	background: white;
 	color: #00ABAE;
@@ -71,7 +78,6 @@ body, html {
 	transition: opacity 1s ease-in;
 }
 
-/* Girls Component */
 .girls-wrapper {
 	position: absolute;
 	width: calc(1102 * var(--scale-factor)); 
@@ -158,8 +164,8 @@ body, html {
 	position: absolute;
 	left: -0.55%;
 	top: 56.8%;
-	width: 62.3%;
-	height: 21.5%;
+	width: 62.3%; 
+	height: 21.5%; 
 	pointer-events: none;
 	cursor: pointer;
 }
@@ -173,7 +179,6 @@ body, html {
 
 .tickets-active {
 	pointer-events: auto !important;
-	/* Removed scaling, only opacity pulse now */
 	animation: ticketPulse 2s infinite ease-in-out;
 }
 
