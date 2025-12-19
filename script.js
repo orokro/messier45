@@ -1,6 +1,6 @@
 /**
- * Merry Christmas Ticket Scratcher - Final Gold Version
- * Features: Security, Logic Fixes, Dialogue Polish, BGM, Procedural Scratch Audio, UI Polish
+ * Merry Christmas Ticket Scratcher - Bundle Edition
+ * Features: Security, Logic Fixes, Dialogue Polish, BGM, Procedural Scratch Audio, Multiple Prizes
  */
 
 // --- Configuration ---
@@ -43,7 +43,8 @@ const CONFIG = {
 const State = {
 	count: 0,
 	nextTargetIndex: 2 + Math.floor(Math.random() * 3), 
-	secretText: "LOADING...", 
+	prizes: [], // Array of prizes
+	prizeIndex: 0, // Current prize index
 	audio: {},
 	assets: {},
 	// Audio Settings
@@ -100,8 +101,6 @@ function setupAudioControls() {
 
 function updateAllVolumes() {
 	const vol = State.isMuted ? 0 : State.masterVolume;
-
-	// 1. Update BGM
 	if (State.bgmObj) {
 		State.bgmObj.volume = 0.6 * vol; 
 	}
@@ -163,7 +162,6 @@ function playScratchSound() {
 	}, 100); 
 }
 
-// --- Modified playSfx to use Master Volume ---
 function playSfx(name, vol=1.0) {
 	const aud = State.assets[name];
 	const globalVol = State.isMuted ? 0 : State.masterVolume;
@@ -177,7 +175,24 @@ function playSfx(name, vol=1.0) {
 	return null;
 }
 
-// --- Modified init ---
+// --- Init & Data ---
+async function loadData() {
+	try {
+		const req = await fetch('data.json');
+		const json = await req.json();
+		
+		if (json.xmas && Array.isArray(json.xmas)) {
+			// Decode all prizes
+			State.prizes = json.xmas.map(str => atob(str));
+		} else {
+			State.prizes = ["ERROR-NO-DATA"];
+		}
+	} catch (e) {
+		console.error(e);
+		State.prizes = ["OFFLINE-MODE"];
+	}
+}
+
 async function init() {
 	console.log("Starting Initialization...");
 	
@@ -206,10 +221,8 @@ function setupStartScreen() {
 	btn.innerText = 'Click to Open';
 	btn.onclick = () => {
 		initAudioSystem();
-		
 		updateAllVolumes();
 		State.bgmObj.play().catch(e => console.log("BGM Blocked", e));
-		
 		playSfx('door', 0.01); 
 		startIntro();
 	};
@@ -223,7 +236,6 @@ function startIntro() {
 
 	loader.style.opacity = '0';
 	
-	// Show Audio Controls Logic
 	setTimeout(() => {
 		document.getElementById('audio-controls').classList.add('visible');
 	}, 1000);
@@ -314,24 +326,26 @@ function loadAudio(name, src) {
 	});
 }
 
-async function loadData() {
-	try {
-		const req = await fetch('data.json');
-		const json = await req.json();
-		if (json.xmas) State.secretText = atob(json.xmas);
-		else State.secretText = "ERROR-NO-DATA";
-	} catch (e) {
-		console.error(e);
-		State.secretText = "OFFLINE-MODE";
-	}
-}
-
 function spawnTicket() {
 	playSfx('woosh');
 	hideDialogue(); 
 
 	const isTarget = (State.count === State.nextTargetIndex);
-	new ScratcherTicket(isTarget);
+	let prizeStr = null;
+
+	if (isTarget) {
+		// Get current prize based on index
+		if (State.prizes.length > 0) {
+			prizeStr = State.prizes[State.prizeIndex];
+			// Increment and Loop
+			State.prizeIndex = (State.prizeIndex + 1) % State.prizes.length;
+		} else {
+			prizeStr = "ERROR";
+		}
+	}
+
+	// Pass the specific prize to this ticket instance
+	new ScratcherTicket(isTarget, prizeStr);
 
 	if (isTarget) {
 		State.nextTargetIndex = State.count + 2 + Math.floor(Math.random() * 4);
@@ -344,8 +358,9 @@ function spawnTicket() {
  * Scratcher Ticket Component Class
  */
 class ScratcherTicket {
-	constructor(isTarget) {
+	constructor(isTarget, prizeStr) {
 		this.isTarget = isTarget;
+		this.prizeStr = prizeStr; // Lock in the prize for this ticket
 		this.container = document.getElementById('ticket-overlay-container');
 		this.gridData = this.generateGrid(isTarget);
 		this.element = this.createDOM();
@@ -428,7 +443,8 @@ class ScratcherTicket {
 		ctx.textBaseline = "middle";
 		ctx.fillStyle = "#333";
 		
-		const txt = this.isTarget ? State.secretText : generateRandomCode();
+		// Use this.prizeStr for winner, or random junk for loser
+		const txt = this.isTarget ? this.prizeStr : generateRandomCode();
 		const cx = CONFIG.coords.textBox.x + (CONFIG.coords.textBox.w / 2);
 		const cy = CONFIG.coords.textBox.y + (CONFIG.coords.textBox.h / 2);
 		ctx.fillText(txt, cx, cy);
@@ -458,7 +474,6 @@ class ScratcherTicket {
 		const scratch = (e) => {
 			if (!isDrawing) return; 
 			
-			// Play Procedural Sound
 			playScratchSound();
 
 			const rect = canvas.getBoundingClientRect();
