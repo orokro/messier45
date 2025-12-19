@@ -1,13 +1,12 @@
 /**
- * Merry Christmas Ticket Scratcher
- * Author: [Your Name/Handle]
- * Date: Dec 2025
+ * Merry Christmas Ticket Scratcher - v2
  */
 
 // --- Configuration ---
 const CONFIG = {
 	sounds: {
 		door: 'sfx/door.mp3',
+		footsteps: 'sfx/footsteps.mp3', // New
 		woosh: 'sfx/woosh.mp3',
 		yay: 'sfx/yay.mp3'
 	},
@@ -28,25 +27,29 @@ const CONFIG = {
 		cols: [91, 251, 411, 571],
 		iconW: 160,
 		iconH: 122,
-		keyBox: { x: 91, y: 862, w: 637, h: 98 } // 728-91, 960-862
+		keyBox: { x: 91, y: 862, w: 637, h: 98 } 
 	}
 };
 
 // --- State Management ---
 const State = {
 	gameCount: 0,
-	nextWinIndex: 2 + Math.floor(Math.random() * 7), // Random between 2 and 9 (3rd game to 10th game)
+	nextWinIndex: 2 + Math.floor(Math.random() * 7), // 3rd to 10th ticket is winner
 	prizeCode: "LOADING...",
-	audio: {}
+	audio: {},
+	assets: {} // Stores actual Image objects
 };
 
 /**
- * Utility: Load Image
+ * Utility: Load Image and Store it
  */
-function loadImage(src) {
+function loadImage(key, src) {
 	return new Promise((resolve, reject) => {
 		const img = new Image();
-		img.onload = () => resolve(img);
+		img.onload = () => {
+			State.assets[key] = img; // Store valid reference
+			resolve(img);
+		};
 		img.onerror = reject;
 		img.src = src;
 	});
@@ -56,26 +59,29 @@ function loadImage(src) {
  * Utility: Load Audio
  */
 function loadAudio(name, src) {
-	return new Promise((resolve, reject) => {
+	return new Promise((resolve) => {
 		const aud = new Audio(src);
+		// Preload settings
+		aud.preload = 'auto';
 		aud.addEventListener('canplaythrough', () => {
-			State.audio[name] = aud;
+			State.assets[name] = aud; // Store audio in same assets dict for simplicity
 			resolve();
 		}, { once: true });
-		aud.onerror = reject;
-		// Fallback for immediate load on some browsers
-		setTimeout(() => resolve(), 3000); 
+		aud.onerror = () => {
+			console.warn("Failed to load audio:", src);
+			resolve(); // Resolve anyway to not block app
+		};
+		// Timeout fallback
+		setTimeout(() => resolve(), 2000); 
 	});
 }
 
-/**
- * Utility: Fetch Prize Data
- */
 async function loadData() {
 	try {
 		const req = await fetch('data.json');
 		const json = await req.json();
 		State.prizeCode = json.prizeKey || "ERROR-NO-KEY";
+		console.log("Prize loaded.");
 	} catch (e) {
 		console.error("Failed to load data.json", e);
 		State.prizeCode = "OFFLINE-KEY";
@@ -88,19 +94,37 @@ async function loadData() {
 async function init() {
 	console.log("Starting Initialization...");
 	
-	// 1. Load Assets
-	const imagePromises = Object.values(CONFIG.images).map(loadImage);
-	// Load icons separately
-	const iconPromises = CONFIG.icons.map(name => loadImage(`img/icons/${name}.png`));
+	// 1. Load Images (with keys)
+	const imagePromises = Object.entries(CONFIG.images).map(([key, src]) => loadImage(key, src));
+	
+	// 2. Load Icons (key = icon name)
+	const iconPromises = CONFIG.icons.map(name => loadImage(name, `img/icons/${name}.png`));
+	
+	// 3. Load Audio
 	const audioPromises = Object.entries(CONFIG.sounds).map(([key, src]) => loadAudio(key, src));
 	
-	// Load Data
+	// 4. Load Data
 	const dataPromise = loadData();
 
 	await Promise.all([...imagePromises, ...iconPromises, ...audioPromises, dataPromise]);
 
-	// 2. Start Intro
-	startIntro();
+	// Assets Ready - Show Start Button
+	setupStartScreen();
+}
+
+function setupStartScreen() {
+	const loaderContent = document.getElementById('loader-content');
+	loaderContent.innerHTML = ''; // Clear "Loading..."
+
+	const btn = document.createElement('button');
+	btn.id = 'start-btn';
+	btn.innerText = 'Click to Open';
+	btn.onclick = () => {
+		// Unlock Audio Context immediately on click
+		playSfx('door', 0.01); // Play silent sound to unlock
+		startIntro();
+	};
+	loaderContent.appendChild(btn);
 }
 
 /**
@@ -115,34 +139,38 @@ function startIntro() {
 	const glowingTicketsImg = document.getElementById('glowing-tickets-img');
 	const glowingTicketsHitbox = document.getElementById('glowing-tickets-hitbox');
 
-	// Fade out loader, fade in BG
+	// Fade out loader
 	loader.style.opacity = '0';
 	setTimeout(() => {
 		loader.remove();
 		scene.style.opacity = '1';
 		
-		// Play Door Sound
+		// Play Door & Footsteps
 		playSfx('door');
+		const steps = playSfx('footsteps');
+		if(steps) steps.loop = true;
 
 		// Start Girl Animation
-		// Wait slightly for bg fade
 		setTimeout(() => {
 			girls.classList.add('animate-enter');
 			
 			// Animation Duration is 4s.
-			// At 4s, we lock position and show bubbles
 			setTimeout(() => {
-				// Remove animation class and set static final position class
-				// to prevent animation replay bugs or jitter
-				girls.style.animation = 'none'; // Stop bounce
+				// STOP FOOTSTEPS
+				if(steps) {
+					steps.pause();
+					steps.currentTime = 0;
+				}
+
+				// Lock Position
+				girls.style.animation = 'none'; 
 				girls.classList.remove('animate-enter');
 				girls.classList.add('girls-final-pos');
 
-				// Show Bubble 1
+				// Sequence Bubbles
 				setTimeout(() => {
 					bubble1.classList.add('visible');
 					
-					// Show Bubble 2
 					setTimeout(() => {
 						bubble2.classList.add('visible');
 
@@ -151,10 +179,7 @@ function startIntro() {
 							glowingTicketsImg.style.opacity = '1';
 							glowingTicketsImg.classList.add('tickets-active');
 							glowingTicketsHitbox.style.pointerEvents = 'auto';
-							
-							// Add Listener
 							glowingTicketsHitbox.addEventListener('click', spawnTicket);
-
 						}, 800);
 					}, 1000);
 				}, 500);
@@ -164,11 +189,15 @@ function startIntro() {
 	}, 1000);
 }
 
-function playSfx(name) {
-	if (State.audio[name]) {
-		State.audio[name].currentTime = 0;
-		State.audio[name].play().catch(e => console.log("Audio autoplay block", e));
+function playSfx(name, vol=1.0) {
+	const aud = State.assets[name];
+	if (aud) {
+		aud.volume = vol;
+		aud.currentTime = 0;
+		aud.play().catch(e => console.log("Audio play error", e));
+		return aud;
 	}
+	return null;
 }
 
 /**
@@ -180,6 +209,8 @@ function spawnTicket() {
 	const isWinner = (State.gameCount === State.nextWinIndex);
 	State.gameCount++;
 
+	console.log(`Spawning Ticket #${State.gameCount}. Winner? ${isWinner}`);
+	
 	new ScratcherTicket(isWinner);
 }
 
@@ -203,8 +234,7 @@ class ScratcherTicket {
 			this.element.style.transform = 'translateY(0)';
 		});
 
-		// Win Logic State
-		this.scratchedQuadrants = new Array(12).fill(0).map(() => [false, false, false, false]); // 12 icons, 4 quadrants
+		this.scratchedQuadrants = new Array(12).fill(0).map(() => [false, false, false, false]); 
 		this.winnerRevealed = false;
 	}
 
@@ -213,77 +243,91 @@ class ScratcherTicket {
 		const iconNames = CONFIG.icons;
 
 		if (isWinner) {
-			// Pick a random winning icon
+			// Winner Logic: 3 Matching + Random others
 			const winIcon = iconNames[Math.floor(Math.random() * iconNames.length)];
-			// Place it 3 times randomly
+			
+			// Create a base array of 12 items
+			let grid = new Array(12).fill(null);
+			
+			// Pick 3 unique positions for the winner
 			let places = [];
 			while(places.length < 3) {
 				let r = Math.floor(Math.random() * 12);
 				if(!places.includes(r)) places.push(r);
 			}
-			
+			this.winningIndices = places; // Save for hit detection
+
+			// Fill winners
+			places.forEach(p => grid[p] = winIcon);
+
+			// Fill rest with random junk (checking to ensure we don't accidentally make 3 of a kind)
+			// But for simplicity, if we have 3 winners, extra matches don't "break" the game logic, 
+			// though it might look confusing. 
+			// To be safe, we just fill randoms.
 			for(let i=0; i<12; i++) {
-				if(places.includes(i)) {
-					icons.push(winIcon);
-				} else {
-					// Random loser icon
-					let rand = iconNames[Math.floor(Math.random() * iconNames.length)];
-					// Try not to make incidental matches if possible, but simple random is fine for losers slots
-					icons.push(rand);
+				if(grid[i] === null) {
+					// Just pick random
+					grid[i] = iconNames[Math.floor(Math.random() * iconNames.length)];
 				}
 			}
-			// Store winning indices for hit detection
-			this.winningIndices = places;
-		} else {
-			// Loser: Ensure NO 3 of a kind
-			// Simple algorithm: fill, check, replace if 3 exist
-			// For simplicity in this prompt, we'll just pure random and assume low probability of collision
-			// or force unique distribution if strictly needed.
-			// Let's just pick randoms but ensure no triplet of specific items.
-			for(let i=0; i<12; i++) {
-				icons.push(iconNames[Math.floor(Math.random() * iconNames.length)]);
-			}
-			this.winningIndices = [];
-		}
+			return grid;
 
-		return icons;
+		} else {
+			// Loser Logic: GUARANTEE NO 3-OF-A-KIND
+			// Strategy: Create a deck with 2 of every icon (14 items total).
+			// Shuffle deck. Pick first 12. 
+			// It is mathematically impossible to have 3 of a kind.
+			
+			let deck = [];
+			iconNames.forEach(name => {
+				deck.push(name);
+				deck.push(name);
+			});
+
+			// Fisher-Yates Shuffle
+			for (let i = deck.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[deck[i], deck[j]] = [deck[j], deck[i]];
+			}
+
+			this.winningIndices = [];
+			return deck.slice(0, 12);
+		}
 	}
 
 	createDOM() {
 		const wrapper = document.createElement('div');
 		wrapper.className = 'scratcher-ticket';
 
-		// Close Button
 		const closeBtn = document.createElement('div');
 		closeBtn.className = 'close-btn';
 		closeBtn.innerHTML = '✖';
 		closeBtn.onclick = () => this.close();
 		wrapper.appendChild(closeBtn);
 
-		// 1. Offscreen Generator for Background (Result)
+		// 1. Offscreen Generator (Base + Icons + Text)
 		const bgCanvas = document.createElement('canvas');
 		bgCanvas.width = 817;
 		bgCanvas.height = 1024;
 		const ctx = bgCanvas.getContext('2d');
 
-		// Draw Base
-		const baseImg = new Image();
-		baseImg.src = CONFIG.images.ticketBase;
-		// We assume preloaded, but for canvas drawing inside class, let's just do it sync-style 
-		// since we awaited them in init().
-		ctx.drawImage(baseImg, 0, 0);
+		// Draw Base - Using PRELOADED asset
+		if (State.assets.ticketBase) {
+			ctx.drawImage(State.assets.ticketBase, 0, 0);
+		}
 
-		// Draw Icons
+		// Draw Icons - Using PRELOADED assets
 		this.gridData.forEach((iconName, index) => {
-			const row = Math.floor(index / 4); // 4 cols
+			const row = Math.floor(index / 4); 
 			const col = index % 4;
 			
 			const x = CONFIG.coords.cols[col];
 			const y = CONFIG.coords.rows[row];
 
-			const img = new Image();
-			img.src = `img/icons/${iconName}.png`;
-			ctx.drawImage(img, x, y, CONFIG.coords.iconW, CONFIG.coords.iconH);
+			const imgObj = State.assets[iconName];
+			if (imgObj) {
+				ctx.drawImage(imgObj, x, y, CONFIG.coords.iconW, CONFIG.coords.iconH);
+			}
 		});
 
 		// Draw Text
@@ -295,32 +339,28 @@ class ScratcherTicket {
 		const txt = this.isWinner ? State.prizeCode : generateFakeKey();
 		const cx = CONFIG.coords.keyBox.x + (CONFIG.coords.keyBox.w / 2);
 		const cy = CONFIG.coords.keyBox.y + (CONFIG.coords.keyBox.h / 2);
-		
 		ctx.fillText(txt, cx, cy);
 
-		// Set as background of wrapper
+		// Apply as background
 		const finalDataUrl = bgCanvas.toDataURL();
 		const layerBg = document.createElement('div');
 		layerBg.className = 'ticket-layer ticket-bg';
 		layerBg.style.backgroundImage = `url(${finalDataUrl})`;
 		wrapper.appendChild(layerBg);
 
-		// 2. Scratch Canvas (Cover)
+		// 2. Scratch Canvas
 		const scratchCanvas = document.createElement('canvas');
 		scratchCanvas.className = 'ticket-layer ticket-canvas';
-		// Set logical resolution to match image, CSS handles display size
 		scratchCanvas.width = 817;
 		scratchCanvas.height = 1024;
 		
 		const sCtx = scratchCanvas.getContext('2d');
-		const coverImg = new Image();
-		coverImg.src = CONFIG.images.ticketCover;
-		// Draw cover immediately
-		sCtx.drawImage(coverImg, 0, 0);
+		// Draw Cover - Using PRELOADED asset
+		if (State.assets.ticketCover) {
+			sCtx.drawImage(State.assets.ticketCover, 0, 0);
+		}
 
-		// Input Handling
 		this.setupScratchInteraction(scratchCanvas, sCtx);
-
 		wrapper.appendChild(scratchCanvas);
 
 		return wrapper;
@@ -331,29 +371,21 @@ class ScratcherTicket {
 
 		const scratch = (e) => {
 			if (!isDrawing) return;
-			
-			// Get Mouse/Touch Position relative to canvas scale
 			const rect = canvas.getBoundingClientRect();
-			
-			// Handle Touch or Mouse
 			const clientX = e.touches ? e.touches[0].clientX : e.clientX;
 			const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-			// Scale Coords
 			const scaleX = canvas.width / rect.width;
 			const scaleY = canvas.height / rect.height;
-
 			const x = (clientX - rect.left) * scaleX;
 			const y = (clientY - rect.top) * scaleY;
 
 			ctx.globalCompositeOperation = 'destination-out';
 			
-			// Main Brush
 			ctx.beginPath();
 			ctx.arc(x, y, 30, 0, Math.PI * 2);
 			ctx.fill();
 
-			// Jitter Brush
 			const jX = x + (Math.random() * 40 - 20);
 			const jY = y + (Math.random() * 40 - 20);
 			ctx.beginPath();
@@ -375,7 +407,6 @@ class ScratcherTicket {
 	checkHotspots(x, y) {
 		if (this.winnerRevealed || !this.isWinner) return;
 
-		// We only care about the winning indices
 		this.winningIndices.forEach(idx => {
 			const row = Math.floor(idx / 4);
 			const col = idx % 4;
@@ -384,9 +415,7 @@ class ScratcherTicket {
 			const w = CONFIG.coords.iconW;
 			const h = CONFIG.coords.iconH;
 
-			// Check if click is inside this icon box
 			if (x >= iconX && x <= iconX + w && y >= iconY && y <= iconY + h) {
-				// Determine Quadrant (0: TL, 1: TR, 2: BL, 3: BR)
 				const halfW = w/2;
 				const halfH = h/2;
 				const localX = x - iconX;
@@ -400,7 +429,6 @@ class ScratcherTicket {
 			}
 		});
 
-		// Check Win Condition: All quadrants of all winning icons scratched
 		const allScratched = this.winningIndices.every(idx => {
 			return this.scratchedQuadrants[idx].every(q => q === true);
 		});
@@ -421,13 +449,10 @@ class ScratcherTicket {
 		this.element.style.transform = 'translateY(150vh)';
 		setTimeout(() => {
 			this.element.remove();
-		}, 700); // Wait for transition
+		}, 700); 
 	}
 }
 
-/**
- * Helper: Fake Keys
- */
 function generateFakeKey() {
 	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	let str = "";
@@ -438,35 +463,29 @@ function generateFakeKey() {
 	return str;
 }
 
-/**
- * Confetti System
- */
 function startConfetti() {
 	const container = document.getElementById('confetti-container');
-	const colors = ['#ff0000', '#00ff00', '#ffffff', '#ffd700']; // Xmas colors
+	const colors = ['#ff0000', '#00ff00', '#ffffff', '#ffd700']; 
 	const particles = [];
 	const particleCount = 100;
 
-	// Spawn
 	for(let i=0; i<particleCount; i++) {
 		const div = document.createElement('div');
 		div.className = 'confetti-piece';
 		div.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-		div.style.left = Math.random() * 100 + 'vw';
 		container.appendChild(div);
 
 		particles.push({
 			element: div,
-			x: parseFloat(div.style.left), // we'll use css left mostly but need updating
+			x: Math.random() * 100, 
 			y: -20,
-			vx: (Math.random() - 0.5) * 2,
-			vy: Math.random() * 3 + 2,
+			vx: (Math.random() - 0.5) * 0.5, // Slower horizontal
+			vy: Math.random() * 2 + 2,
 			r: 0,
 			vr: (Math.random() - 0.5) * 10
 		});
 	}
 
-	// Loop
 	function update() {
 		let stillActive = false;
 		particles.forEach(p => {
@@ -474,23 +493,9 @@ function startConfetti() {
 			p.x += p.vx;
 			p.r += p.vr;
 
-			p.element.style.transform = `translate3d(0, ${p.y}px, 0) rotate(${p.r}deg)`;
-			// Note: We use translate3d on the Y axis, but we shouldn't change the Left property constantly causes reflow
-			// But for simplicity of this script, let's keep it simple. Actually better to use transform for everything
-			// Current implementation: css left is static, transform handles movement.
-			// wait, css left is static, translate3d moves Y. X needs to be moved via translate too.
-			
-			// Fix:
-			p.element.style.transform = `translate3d(${p.x - parseFloat(p.element.style.left||0)}px, ${p.y}px, 0) rotate(${p.r}deg)`;
-			// Correction: simplest is just update top/left? No, reflows.
-			// Let's just update transform X/Y
-			p.element.style.transform = `translate3d(0, ${p.y}px, 0) translateX(${p.x}vw) rotate(${p.r}deg)`; // This is getting messy with units.
-			
-			// Simpler approach for vanilla JS particle system without complex matrix math:
-			// Just update top/left. Modern browsers handle it okay for 100 elements.
-			p.element.style.top = p.y + 'px';
-			p.element.style.left = `calc(${p.x}vw + ${p.vx}px)`; // Approximation
-			p.element.style.transform = `rotate(${p.r}deg)`;
+			// Use Translate3D for best performance
+			// x is in vw units approx, y in px.
+			p.element.style.transform = `translate3d(${p.x}vw, ${p.y}px, 0) rotate(${p.r}deg)`;
 
 			if (p.y < window.innerHeight) stillActive = true;
 		});
@@ -498,12 +503,10 @@ function startConfetti() {
 		if (stillActive) {
 			requestAnimationFrame(update);
 		} else {
-			container.innerHTML = ''; // Cleanup
+			container.innerHTML = ''; 
 		}
 	}
-
 	requestAnimationFrame(update);
 }
 
-// Start
 window.addEventListener('DOMContentLoaded', init);
