@@ -1,0 +1,255 @@
+/* Reset and Base */
+body, html {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	height: 100%;
+	overflow: hidden; /* Prevent scrolling during animations */
+	background-color: #000;
+	font-family: sans-serif;
+}
+
+/* * ----------------------------
+ * Loader
+ * ----------------------------
+ */
+#loader {
+	position: fixed;
+	inset: 0;
+	background-color: black;
+	z-index: 9999;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	color: white;
+	transition: opacity 1s ease-out;
+}
+
+/* * ----------------------------
+ * Main Scene
+ * ----------------------------
+ */
+#scene {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	background-image: url('img/bg.png');
+	background-size: cover;
+	background-position: center;
+	opacity: 0; /* Starts hidden, fades in after loader */
+	transition: opacity 1s ease-in;
+}
+
+/* * Girls Component 
+ * Native Ratio: 1102 / 1294 = ~0.85
+ */
+.girls-wrapper {
+	position: absolute;
+	/* Native dimensions used for aspect-ratio calc */
+	width: calc(1102 * var(--scale-factor)); 
+	height: calc(1294 * var(--scale-factor));
+	background-image: url('img/girls.png');
+	background-size: contain;
+	background-repeat: no-repeat;
+	
+	/* Initial State (Before Animation) */
+	opacity: 0;
+	left: 20%;
+	bottom: -10%;
+	/* We set a CSS variable for scale that we will animate */
+	--scale-factor: calc((45 * 1vh) / 1294 * 100); /* Start at 45% screen height */
+	transform-origin: bottom center;
+}
+
+/* The Walking/Bouncing Animation Class */
+.animate-enter {
+	animation: 
+		walkForward 4s linear forwards,
+		bounce 0.5s ease-in-out infinite,
+		fadeInGirls 1s ease-in forwards;
+}
+
+/* After animation, we lock it here */
+.girls-final-pos {
+	opacity: 1;
+	left: 50%;
+	bottom: -10%;
+	transform: translateX(-50%);
+	/* 110vh height logic: 110vh / 1294px = scale factor */
+	height: 110vh; 
+	width: calc(110vh * (1102 / 1294));
+}
+
+@keyframes walkForward {
+	0% {
+		left: 20%;
+		height: 45vh;
+		width: calc(45vh * (1102 / 1294));
+		transform: translateX(0);
+	}
+	100% {
+		left: 50%;
+		height: 110vh;
+		width: calc(110vh * (1102 / 1294));
+		transform: translateX(-50%);
+	}
+}
+
+@keyframes fadeInGirls {
+	0% { opacity: 0; }
+	100% { opacity: 1; }
+}
+
+@keyframes bounce {
+	0%, 100% { bottom: -10%; }
+	50% { bottom: -8%; } /* Slight lift */
+}
+
+/* * Children of Girls Component 
+ * Note: Positions are relative to the wrapper size
+ */
+
+.bubble {
+	position: absolute;
+	opacity: 0;
+	transition: opacity 0.5s ease-in, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+#bubble-1 {
+	/* Native: 433x150. Right: 100%, Top: 2% */
+	right: 95%; /* Adjusted slightly to not act weird on edge */
+	top: 2%;
+	width: 39%; /* 433/1102 approx */
+	transform: translateY(20px);
+}
+
+#bubble-2 {
+	/* Native: 511x176. Left: 100%, Top: 2% */
+	left: 95%;
+	top: 2%;
+	width: 46%; /* 511/1102 approx */
+	transform: translateY(20px);
+}
+
+.bubble.visible {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+#glowing-tickets-hitbox {
+	position: absolute;
+	/* Native Coords: 0, 744 on a 1102x1294 grid */
+	left: 0;
+	top: 57.5%; /* 744 / 1294 */
+	width: 62.3%; /* 687 / 1102 */
+	height: 21.5%; /* 278 / 1294 */
+	pointer-events: none; /* Inactive until glowing */
+	cursor: pointer;
+}
+
+#glowing-tickets-img {
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	transition: opacity 1s ease;
+}
+
+.tickets-active {
+	pointer-events: auto !important;
+	animation: ticketPulse 2s infinite ease-in-out;
+}
+
+@keyframes ticketPulse {
+	0% { filter: drop-shadow(0 0 0px rgba(255, 215, 0, 0)); transform: scale(1); }
+	50% { filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.8)); transform: scale(1.02); }
+	100% { filter: drop-shadow(0 0 0px rgba(255, 215, 0, 0)); transform: scale(1); }
+}
+
+/* * ----------------------------
+ * Scratcher Overlay
+ * ----------------------------
+ */
+#ticket-overlay-container {
+	position: fixed;
+	inset: 0;
+	pointer-events: none; /* Allow clicking through when empty */
+	display: flex;
+	justify-content: center;
+	align-items: center; /* Vertical center */
+	z-index: 100;
+}
+
+/* The Ticket Itself */
+.scratcher-ticket {
+	pointer-events: auto;
+	position: relative;
+	/* Responsive Logic */
+	height: 80vh; 
+	aspect-ratio: 817 / 1024;
+	max-width: 90vw; /* Prevent overflow on mobile */
+	
+	box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+	transform: translateY(150vh); /* Start offscreen bottom */
+	transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); /* ease-out-quintish */
+}
+
+/* Base layer (Winning numbers) */
+.ticket-layer {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+}
+
+.ticket-bg {
+	background-size: 100% 100%;
+}
+
+.ticket-canvas {
+	cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" style="fill:rgba(0,0,0,0.5)"><circle cx="10" cy="10" r="8" stroke="white" stroke-width="2"/></svg>') 10 10, auto; 
+	touch-action: none;
+}
+
+/* Close Button */
+.close-btn {
+	position: absolute;
+	top: -20px;
+	right: -20px;
+	width: 40px;
+	height: 40px;
+	background: black;
+	color: white;
+	border-radius: 50%;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	font-weight: bold;
+	font-size: 20px;
+	cursor: pointer;
+	border: 2px solid white;
+	transition: background 0.2s;
+	z-index: 10;
+}
+
+.close-btn:hover {
+	background: #d00;
+}
+
+/* * ----------------------------
+ * Confetti
+ * ----------------------------
+ */
+#confetti-container {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	z-index: 200;
+}
+
+.confetti-piece {
+	position: absolute;
+	width: 10px;
+	height: 10px;
+	top: -20px;
+}
