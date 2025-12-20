@@ -1,3 +1,11 @@
+/*
+	style.css
+	---------
+
+	All our custom styles for the interactive scene.
+	Including animations, layout, and visual effects.
+*/
+
 /* Reset and Base */
 body, html {
 	margin: 0;
@@ -27,61 +35,95 @@ img {
 	font-style: normal;
 }
 
-/* * ----------------------------
- * Loader & Start Screen
- * ----------------------------
+
+/** ----------------------------
+ *  Loader & Start Screen
+ *  ----------------------------
  */
+
+ /* The fullscreen loader overlay */
 #loader {
+
+	/* Fullscreen Overlay */
 	position: fixed;
 	inset: 0;
-	background-color: #00ABAE;
 	z-index: 9999;
+
+	/* box styles */
+	background-color: #00ABAE;
 	display: flex;
 	justify-content: center;
 	align-items: center;
+
+	/* text styles */
 	color: white;
+
+	/* Fade Out Transition */
 	transition: opacity 1s ease-out;
 }
 
+/* The area with the loading text and button */
 #loader-content {
+
+	/* text styles */
 	text-align: center;
 }
 
+/* Loading Text */
 .loading-text {
+
+	/* text styles */
 	font-size: 24px;
 	margin-bottom: 20px;
 	font-weight: bold;
 	letter-spacing: 2px;
 }
 
+/* The button to start the experience */
 #start-btn {
+
+	/* box styles */
 	background: white;
-	color: #00ABAE;
 	border: none;
 	padding: 15px 40px;
-	font-size: 20px;
-	font-weight: bold;
-	cursor: pointer;
 	border-radius: 50px;
 	box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-	transition: transform 0.2s, box-shadow 0.2s;
+
+	/* text styles */
+	color: #00ABAE;
+	font-size: 20px;
+	font-weight: bold;
 	text-transform: uppercase;
+
+	/* appear clickable */
+	cursor: pointer;
+	
+	/* use animation for hover effect */
+	transition: transform 0.2s, box-shadow 0.2s;
 }
 
+/* Hover effect for the start button */
 #start-btn:hover {
 	transform: scale(1.05);
 	box-shadow: 0 6px 20px rgba(0,0,0,0.3);
 }
 
-/* * ----------------------------
- * Audio Controls Widget
- * ----------------------------
+
+/** ----------------------------
+ *  Audio Controls Widget
+ *  ----------------------------
  */
+
+/* control box on upper right for audio settings */
 #audio-controls {
+
+	/* fixed on top right */
 	position: fixed;
 	top: 20px;
 	right: 20px;
 	z-index: 9999;
+
+	/* box styles */
 	display: flex;
 	align-items: center;
 	gap: 15px;
@@ -92,112 +134,164 @@ img {
 	border: 1px solid rgba(255, 255, 255, 0.2);
 	box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 	
-	/* Start Hidden */
+	/* Start Hidden and not interactive */
 	opacity: 0;
 	pointer-events: none;
+
+	/* use transition for smooth reveal */
 	transition: opacity 1s ease-in, background 0.3s;
 }
 
-/* Class to reveal widget */
+/* when the button is revealed */
 #audio-controls.visible {
 	opacity: 1;
 	pointer-events: auto;
 }
 
+/* hover effect for the control box */
 #audio-controls:hover {
 	background: rgba(0, 0, 0, 0.8);
 }
 
+/* mute button styles */
 #mute-btn {
+
+	/* appear clickable */
 	cursor: pointer;
+
+	/* box styles */
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	opacity: 0.8;
+
+	/* use transition for hover effect */
 	transition: opacity 0.2s;
 }
 
+/* hover effect for mute button */
 #mute-btn:hover {
 	opacity: 1;
 }
 
+/* volume slider styles */
 #volume-slider {
+
+	/* restyle the slider */
 	-webkit-appearance: none;
+	outline: none;
+
+	/* box styles */
 	width: 100px;
 	height: 6px;
 	background: rgba(255, 255, 255, 0.2);
 	border-radius: 5px;
-	outline: none;
+
+	/* appear clickable */
 	cursor: pointer;
 }
 
+/* change the thumb styles */
 #volume-slider::-webkit-slider-thumb {
+
+	/* restyle the thumb */
 	-webkit-appearance: none;
 	appearance: none;
+
+	/* box styles */
 	width: 16px;
 	height: 16px;
 	background: #fff;
 	border-radius: 50%;
-	cursor: pointer;
 	box-shadow: 0 0 5px rgba(0,0,0,0.2);
+
+	/* appear clickable */
+	cursor: pointer;
+
+	/* use transition for hover effect */
 	transition: transform 0.1s;
 }
 
+/* hover effect for the thumb */
 #volume-slider::-webkit-slider-thumb:hover {
 	transform: scale(1.2);
 }
 
+/* Firefox styles for the thumb */
 #volume-slider::-moz-range-thumb {
+
+	/* box styles */
 	width: 16px;
 	height: 16px;
 	background: #fff;
 	border: none;
 	border-radius: 50%;
-	cursor: pointer;
 	box-shadow: 0 0 5px rgba(0,0,0,0.2);
+
+	/* appear clickable */
+	cursor: pointer;
 }
 
+/* Responsive Adjustments */
 @media (max-width: 600px) {
+
 	#audio-controls {
 		top: 10px;
 		right: 10px;
 		padding: 8px 15px;
 	}
+
 	#volume-slider {
 		width: 80px;
 	}
 }
 
-/* * ----------------------------
- * Main Scene
- * ----------------------------
+
+/** ----------------------------
+ *  Main Scene
+ *  ----------------------------
  */
+
+/* the main scene container */
 #scene {
+
+	/* full screen */
 	position: relative;
 	width: 100%;
 	height: 100%;
+
+	/* box styles */
 	background-image: url('img/bg.png');
 	background-size: cover;
 	background-position: center;
+
+	/* use transitions for fade-in effects */
 	opacity: 0;
 	transition: opacity 1s ease-in;
 }
 
+/* the outer container for the girls "component" */
 .girls-wrapper {
+
+	/* fixed positioning */
 	position: absolute;
+	left: 20%;
+	bottom: -10%;
 	width: calc(1102 * var(--scale-factor)); 
 	height: calc(1294 * var(--scale-factor));
+
+	/* box styles */
 	background-image: url('img/girls.png');
 	background-size: contain;
 	background-repeat: no-repeat;
-	
-	opacity: 0;
-	left: 20%;
-	bottom: -10%;
 	--scale-factor: calc((45 * 1vh) / 1294 * 100); 
+
+	/* use css transitions for fade */
+	opacity: 0;	
 	transform-origin: bottom center;
 }
 
+/* for the entering animation */
 .animate-enter {
 	animation: 
 		walkForward 4s linear forwards,
@@ -205,8 +299,13 @@ img {
 		fadeInGirls 1s ease-in forwards;
 }
 
+/* the final position the girls end up in */
 .girls-final-pos {
+
+	/* fully visible */
 	opacity: 1;
+
+	/* box styles */
 	left: 50%;
 	bottom: -10%;
 	transform: translateX(-50%);
@@ -214,6 +313,7 @@ img {
 	width: calc(110vh * (1102 / 1294));
 }
 
+/* animation to walk in and scale up */
 @keyframes walkForward {
 	0% {
 		left: 20%;
@@ -229,23 +329,30 @@ img {
 	}
 }
 
+/* animation to fade in */
 @keyframes fadeInGirls {
 	0% { opacity: 0; }
 	100% { opacity: 1; }
 }
 
+/* apply a repeating bounce effect to imply walking motion */
 @keyframes bounce {
 	0%, 100% { bottom: -10%; }
 	50% { bottom: -8%; }
 }
 
-/* Children */
+/* common styles for our speech bubble boxes */
 .bubble {
+
+	/* fixed positioning */
 	position: absolute;
+
+	/* use css transitions for fade and slide */
 	opacity: 0;
 	transition: opacity 0.5s ease-in, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+/* the first bubble on the left for Skiddo */
 #bubble-1 {
 	right: 95%;
 	top: 2%;
@@ -253,6 +360,7 @@ img {
 	transform: translateY(20px);
 }
 
+/* the second bubble on the right for Mumei */
 #bubble-2 {
 	left: 95%;
 	top: 2%;
@@ -260,21 +368,30 @@ img {
 	transform: translateY(20px);
 }
 
+/* when the bubble is visible */
 .bubble.visible {
 	opacity: 1;
 	transform: translateY(0);
 }
 
+/* the clickable area for the prize scratcher tickets to click */
 #glowing-tickets-hitbox {
+
+	/* fixed position over the girls image */
 	position: absolute;
 	left: -0.55%;
-	top: 56.8%;
+	top: 56.9%;
 	width: 62.3%; 
 	height: 21.5%; 
+
+	/* disable interactions until they're visible */
 	pointer-events: none;
+
+	/* appear clickable once were visible */
 	cursor: pointer;
 }
 
+/* the glowing ticket image overlay */
 #glowing-tickets-img {
 	width: 100%;
 	height: 100%;
@@ -282,40 +399,60 @@ img {
 	transition: opacity 1s ease;
 }
 
+/* when tickets are active and glowing */
 .tickets-active {
 	pointer-events: auto !important;
 	animation: ticketPulse 2s infinite ease-in-out;
 }
 
+/* Ticket Glow Animation */
 @keyframes ticketPulse {
-	0% { filter: drop-shadow(0 0 0px rgba(255, 215, 0, 0)); opacity: 0.8; }
+	0% { filter: drop-shadow(0 0 0px rgba(255, 215, 0, 0)); opacity: 0.2; }
 	50% { filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.8)); opacity: 1; }
-	100% { filter: drop-shadow(0 0 0px rgba(255, 215, 0, 0)); opacity: 0.8; }
+	100% { filter: drop-shadow(0 0 0px rgba(255, 215, 0, 0)); opacity: 0.2; }
 }
 
-/* Scratcher Overlay */
+/* the main outer wrapper where the scratcher ticket appears */
 #ticket-overlay-container {
+
+	/* fullscreen fixed overlay */
 	position: fixed;
 	inset: 0;
-	pointer-events: none;
+
+	/* box styles */
 	display: flex;
 	justify-content: center;
 	align-items: center;
 	z-index: 100;
+
+	/* disable interactions with background */
+	pointer-events: none;
 }
 
+/* the main scratcher ticket box */
 .scratcher-ticket {
-	pointer-events: auto;
+
+	/* size and positioning */
 	position: relative;
 	height: 80vh; 
 	aspect-ratio: 817 / 1024;
 	max-width: 90vw;
+
+	/* box settings */
 	box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+
+	/* re-enable interactions (parent container disabled them) */
+	pointer-events: auto;
+	
+	/* use css transitions for entrance/exit */
 	transform: translateY(150vh);
 	transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* the layer that has the scratchable canvas and background */
 .ticket-layer {
+
+	/* full size of ticket */
 	position: absolute;
 	top: 0;
 	left: 0;
@@ -323,47 +460,64 @@ img {
 	height: 100%;
 }
 
+/* styles for the background image of the ticket */
 .ticket-bg {
 	background-size: 100% 100%;
 }
 
+/* the canvas where the user scratches */
 .ticket-canvas {
 	cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" style="fill:rgba(0,0,0,0.5)"><circle cx="10" cy="10" r="8" stroke="white" stroke-width="2"/></svg>') 10 10, auto; 
 	touch-action: none;
 }
 
+/* the close button for the ticket */
 .close-btn {
+
+	/* fixed on the top-right, overflowing centering on the ticket corner */
 	position: absolute;
 	top: -20px;
 	right: -20px;
 	width: 40px;
 	height: 40px;
-	background: black;
-	color: white;
+	z-index: 10;
+
+	/* box styles */
+	background: black;	
 	border-radius: 50%;
 	display: flex;
 	justify-content: center;
 	align-items: center;
+	border: 2px solid white;
+
+	/* text styles */
+	color: white;
 	font-weight: bold;
 	font-size: 20px;
+
+	/* appear clickable */
 	cursor: pointer;
-	border: 2px solid white;
+	
+	/* use css transitions for hover effect */
 	transition: background 0.2s;
-	z-index: 10;
 }
 
+/* close button hover effect  */
 .close-btn:hover {
 	background: #d00;
 }
 
-/* Confetti */
+/* The main confetti container */
 #confetti-container {
+
+	/* fullscreen fixed overlay on top of everything */
 	position: fixed;
 	inset: 0;
 	pointer-events: none;
 	z-index: 200;
 }
 
+/* the common styles for individual confetti pieces */
 .confetti-piece {
 	position: absolute;
 	width: 10px;

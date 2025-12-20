@@ -8,13 +8,17 @@
 </head>
 <body>
 
+	<!-- full screen loader before assets are ready -->
 	<div id="loader">
 		<div id="loader-content">
 			<div class="loading-text">Loading Presents...</div>
 		</div>
 	</div>
 
+	<!-- main scene container -->
 	<main id="scene">
+
+		<!-- Skiddo and Mumei element that bounces in and has speech bubbles, tickets, etc-->
 		<div id="girls-component" class="girls-wrapper">
 			<img src="img/speech_bubble_1.png" id="bubble-1" class="bubble" alt="Speech Bubble 1">
 			<img src="img/speech_bubble_2.png" id="bubble-2" class="bubble" alt="Speech Bubble 2">
@@ -25,9 +29,13 @@
 		</div>
 	</main>
 
+	<!-- the area our prize scratcher tickets will spawn -->
 	<div id="ticket-overlay-container"></div>
+
+	<!-- the area confetti particles will spawn for winning tickets -->
 	<div id="confetti-container"></div>
 
+	<!-- the control box for the audio system-->
 	<div id="audio-controls">
 		<div id="mute-btn" role="button" aria-label="Toggle Mute">
 			<svg id="icon-sound-on" viewBox="0 0 24 24" fill="white" width="24px" height="24px">
@@ -40,6 +48,8 @@
 		<input type="range" id="volume-slider" min="0" max="1" step="0.01" value="1">
 	</div>
 
+	<!-- load our logic that will kick off on ready -->
 	<script src="script.js"></script>
+	
 </body>
 </html>

@@ -1,9 +1,19 @@
+/*
+	start.js
+	--------
+
+	Simple script to run a local server for dev/debugging
+*/
+
+// Dependencies
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// Configuration
 const PORT = 3000;
 
+// MIME types mapping
 const mimeTypes = {
     '.html': 'text/html',
     '.js': 'text/javascript',
@@ -17,18 +27,25 @@ const mimeTypes = {
     '.ico': 'image/x-icon',
 };
 
+// create server
 const server = http.createServer((req, res) => {
+
+	// log the request url
     console.log(`request: ${req.url}`);
 
+	// determine the file path
     let filePath = '.' + req.url;
     if (filePath === './') {
         filePath = './index.html';
     }
 
+	// determine the content type
     const extname = String(path.extname(filePath)).toLowerCase();
     const contentType = mimeTypes[extname] || 'application/octet-stream';
 
+	// read the file & serve it
     fs.readFile(filePath, (error, content) => {
+
         if (error) {
             if (error.code === 'ENOENT') {
                 // File not found
@@ -49,9 +66,13 @@ const server = http.createServer((req, res) => {
     });
 });
 
+
+// start server
 server.listen(PORT, () => {
+	
     console.log(`\n--------------------------------------------------`);
     console.log(`Server running at http://127.0.0.1:${PORT}/`);
     console.log(`Hit CTRL+C to stop the server`);
     console.log(`--------------------------------------------------\n`);
+
 });
